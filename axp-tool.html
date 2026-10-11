@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>AXP 解包工具</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='6' width='12' height='12' rx='2' fill='%2306b6d4'/%3E%3Crect x='16' y='14' width='12' height='12' rx='2' fill='%23f59e0b'/%3E%3C/svg%3E">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#161b26; --panel:#1e2535; --head:#252d40; --border:#2e3850;
+  --text:#c5cde0; --dim:#7a849e; --faint:#556080;
+  --accent:#0d9488; --accent2:#d4a853; --accent-soft:#0e3a4a;
+  --input:#121828; --hover:#263048; --sel:#0e3a4a; --sel-text:#5eead4;
+  --log-bg:#0c1018; --ts:#4a7a70;
+}
+html[data-theme="light"]{
+  --bg:#eef2f0; --panel:#ffffff; --head:#e2ebe8; --border:#c8d8d4;
+  --text:#2a3548; --dim:#6a7a88; --faint:#9aa8b0;
+  --accent:#0d7a6e; --accent2:#b8862e; --accent-soft:#d0ebe6;
+  --input:#f5f8f7; --hover:#e8f0ee; --sel:#c5e8e2; --sel-text:#0a5c50;
+  --log-bg:#1a2030; --ts:#6a9a90;
+}
+html,body{height:100vh;width:100%;overflow:hidden;font-family:"Microsoft YaHei UI","Microsoft YaHei","PingFang SC",sans-serif;font-size:12.5px;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased}
+.window{display:flex;flex-direction:column;height:100%;background:var(--bg)}
+
+.titlebar{height:42px;display:flex;align-items:center;padding:0 14px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0}
+.titlebar .logo{width:24px;height:24px;margin-right:10px}
+.titlebar .title{font-size:15px;font-weight:700;color:var(--accent);letter-spacing:2px}
+.titlebar .sub{font-size:11px;color:var(--dim);margin-left:14px;padding-left:14px;border-left:1px solid var(--border)}
+.titlebar .theme-btn{margin-left:auto;height:26px;padding:0 12px;background:var(--head);border:1px solid var(--border);border-radius:4px;color:var(--dim);cursor:pointer;font-size:11px}
+.titlebar .theme-btn:hover{color:var(--accent);border-color:var(--accent)}
+
+.dir-bar{display:flex;align-items:center;padding:6px 14px;gap:8px;background:var(--panel);flex-shrink:0;border-bottom:1px solid var(--border)}
+.dir-bar label{font-size:12px;color:var(--dim);white-space:nowrap}
+.dir-bar input{flex:1;height:28px;background:var(--input);border:1px solid var(--border);border-radius:4px;padding:0 10px;color:var(--text);font-size:12px;outline:none}
+.dir-bar input:focus{border-color:var(--accent)}
+
+.btn{height:28px;padding:0 12px;background:var(--head);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;white-space:nowrap;transition:all .12s;font-family:inherit}
+.btn:hover{background:var(--hover);border-color:var(--accent);color:var(--accent)}
+.btn:active{background:var(--input)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{filter:brightness(1.15);color:#fff}
+.btn.danger:hover{border-color:#ef4444;color:#ef4444}
+.btn.mini{height:26px;padding:0 10px;font-size:11px;flex-shrink:0}
+
+.main{display:flex;flex:1;gap:6px;padding:6px 14px;min-height:0}
+.panel{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--border);border-radius:6px;overflow:hidden;min-height:0}
+.pkg-panel{width:34%}
+.file-panel{flex:1}
+.panel-head{height:30px;display:flex;align-items:center;padding:0 10px;background:var(--head);border-bottom:1px solid var(--border);font-size:11px;font-weight:600;color:var(--dim);flex-shrink:0;letter-spacing:1px}
+
+.tbl-wrap{flex:1;overflow:auto;overflow-x:hidden;min-height:0}
+table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:12px}
+th{background:var(--head);border-bottom:1px solid var(--border);padding:5px 8px;text-align:left;font-weight:600;color:var(--dim);position:sticky;top:0;z-index:1;font-size:11px;white-space:nowrap}
+td{padding:3px 8px;border-bottom:1px solid var(--border);color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.9}
+tr:hover td{background:var(--hover)}
+tr.sel td{background:var(--sel) !important;color:var(--sel-text)}
+.num{text-align:right;font-family:Consolas,monospace;font-size:11px;color:var(--dim)}
+tr.sel .num{color:var(--sel-text)}
+
+.st-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.st-normal{background:#4ade80}.st-rewrite{background:#d4a853}.st-opaque{background:#f97316}
+.st-bad{background:#ef4444}.st-noname{background:#888}.st-mismatch{background:#a78bfa}
+
+.filter-bar{display:flex;align-items:center;padding:5px 10px;gap:6px;background:var(--head);border-bottom:1px solid var(--border);flex-shrink:0}
+.filter-bar input{flex:1;height:26px;background:var(--input);border:1px solid var(--border);border-radius:4px;padding:0 8px;color:var(--text);font-size:12px;outline:none}
+.filter-bar input:focus{border-color:var(--accent)}
+.filter-bar select{height:26px;background:var(--input);border:1px solid var(--border);border-radius:4px;padding:0 6px;color:var(--text);font-size:12px;outline:none}
+
+.status-bar{height:26px;display:flex;align-items:center;padding:0 10px;gap:12px;background:var(--head);border-top:1px solid var(--border);font-size:11px;color:var(--dim);flex-shrink:0}
+.status-bar b{color:var(--text);font-weight:600}
+
+.export-bar{display:flex;align-items:center;padding:6px 14px;gap:10px;background:var(--panel);border-top:1px solid var(--border);flex-shrink:0}
+.export-bar label{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--dim);cursor:pointer}
+.export-bar input[type=checkbox]{accent-color:var(--accent)}
+.export-bar .path{flex:1;max-width:300px;height:26px;background:var(--input);border:1px solid var(--border);border-radius:4px;padding:0 8px;color:var(--text);font-size:12px;outline:none}
+.progress{margin-left:auto;display:flex;align-items:center;gap:8px}
+.progress-bar{width:180px;height:10px;background:var(--input);border:1px solid var(--border);border-radius:5px;overflow:hidden}
+.progress-bar .fill{height:100%;width:0;background:var(--accent);transition:width .2s}
+.progress-text{font-size:11px;color:var(--dim);min-width:120px}
+
+.btn-row{display:flex;flex-wrap:wrap;padding:5px 14px;gap:5px;background:var(--panel);flex-shrink:0}
+.btn-row .btn{flex:1;height:30px;font-size:11.5px}
+
+.log-window{margin:0 14px 8px;height:90px;background:var(--log-bg);border:1px solid var(--border);border-radius:6px;overflow-y:auto;flex-shrink:0;padding:6px 12px;font-family:Consolas,monospace;font-size:11.5px;line-height:1.6;color:#9ad0c0}
+.log-window .ts{color:var(--ts);margin-right:6px}
+
+.mask{position:fixed;inset:0;background:rgba(6,9,16,.62);display:none;align-items:center;justify-content:center;z-index:120}
+.mask.show{display:flex}
+.modal{background:var(--panel);border:1px solid var(--border);border-radius:8px;width:min(880px,94%);max-height:84vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 14px 44px rgba(0,0,0,.5)}
+.modal-head{height:36px;display:flex;align-items:center;gap:10px;padding:0 12px;background:var(--head);border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:var(--dim);flex-shrink:0}
+.modal-head .btn{margin-left:auto}
+.modal .btn{flex-shrink:0}
+.modal-body{padding:10px 12px;overflow:auto;min-height:0;flex:1}
+.modal-meta{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:11.5px;color:var(--dim);margin-bottom:8px}
+.modal-meta b{color:var(--text);font-weight:600}
+.modal-pre{background:var(--log-bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-family:Consolas,monospace;font-size:11.5px;line-height:1.5;color:#9ad0c0;white-space:pre-wrap;word-break:break-all;max-height:50vh;overflow:auto}
+.form-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.form-row label{width:82px;font-size:12px;color:var(--dim);white-space:nowrap;flex-shrink:0}
+.form-row input,.form-row select{flex:1;min-width:0;height:28px;background:var(--input);border:1px solid var(--border);border-radius:4px;padding:0 8px;color:var(--text);font-size:12px;outline:none;font-family:inherit}
+.form-row input:focus,.form-row select:focus{border-color:var(--accent)}
+.form-row .num-in{flex:1 1 auto;max-width:360px}
+.modal-result{background:var(--log-bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:11.5px;line-height:1.6;color:#9ad0c0;white-space:pre-wrap;word-break:break-all;max-height:26vh;overflow:auto}
+.modal-result.err{color:#f8b4b4;border-color:#ef4444}
+.cd-tip{font-size:11.5px;color:var(--dim);line-height:1.7;margin:0 0 8px;padding:6px 9px;background:var(--input);border-left:2px solid var(--accent);border-radius:0 4px 4px 0}
+.cd-tip b{color:var(--text)}
+.cd-prog{font-size:11.5px;color:var(--accent);min-height:16px;margin:0 0 6px;font-family:Consolas,monospace}
+#cdMask .form-row label{width:92px}
+
+.toast{position:fixed;bottom:120px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--accent-soft);color:var(--sel-text);padding:8px 20px;border-radius:4px;font-size:12px;z-index:99;opacity:0;transition:all .2s;pointer-events:none;border:1px solid var(--accent)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--accent)}
+tr.loading td{text-align:center;color:var(--faint);padding:30px}
+</style>
+</head>
+<body>
+<div class="window">
+  <div class="titlebar">
+    <svg class="logo" viewBox="0 0 32 32"><rect x="4" y="6" width="12" height="12" rx="2" fill="var(--accent)" transform="rotate(-12 10 12)"/><rect x="16" y="14" width="12" height="12" rx="2" fill="var(--accent2)" transform="rotate(12 22 20)"/></svg>
+    <span class="title">AXP 解包工具</span>
+    <span class="sub">天龙八部 · 只读客户端文件 · 不联网</span>
+    <button class="theme-btn" onclick="toggleTheme()">☀ 浅色</button>
+  </div>
+
+  <div class="dir-bar">
+    <label>Data 目录</label>
+    <input type="text" id="dataDir" value="D:\XTLBB\Data">
+    <button class="btn mini" onclick="browseDataDir()">浏览…</button>
+    <button class="btn primary" onclick="openOne()">打开 AXP 文件…</button>
+    <button class="btn" onclick="pickDir()">选目录</button>
+    <button class="btn" onclick="rescan()">重新扫描</button>
+  </div>
+
+  <div class="main">
+    <div class="panel pkg-panel">
+      <div class="panel-head">包列表</div>
+      <div class="tbl-wrap" id="pkgWrap">
+        <table>
+          <colgroup><col style="width:28%"><col style="width:14%"><col style="width:14%"><col style="width:12%"><col style="width:14%"><col style="width:18%"></colgroup>
+          <thead><tr><th>包名</th><th class="num">条目</th><th class="num">原文</th><th class="num">明文</th><th class="num">可解码</th><th class="num">有名</th></tr></thead>
+          <tbody id="pkgBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel file-panel">
+      <div class="filter-bar">
+        <input type="text" id="filterKw" placeholder="搜索文件名...">
+        <select id="filterStatus">
+          <option>全部</option><option>正常</option><option>脚本容器</option><option>每15字节有改写</option>
+          <option>未解出</option><option>无名字</option><option>后缀与内容不一致</option>
+          <option>内容异常</option><option>长度异常</option>
+        </select>
+      </div>
+      <div class="tbl-wrap" id="fileWrap">
+        <table>
+          <colgroup><col style="width:40%"><col style="width:22%"><col style="width:12%"><col style="width:13%"><col style="width:13%"></colgroup>
+          <thead><tr><th>文件名</th><th>状态</th><th>形态</th><th class="num">存储</th><th class="num">内容</th></tr></thead>
+          <tbody id="fileBody"></tbody>
+        </table>
+      </div>
+      <div class="status-bar" id="fileStatus">就绪</div>
+    </div>
+  </div>
+
+  <div class="export-bar">
+    <label><input type="checkbox" id="chkEnc"> 仍无法解码的也导出(.enc)</label>
+    <label>导出到</label>
+    <input type="text" class="path" id="outDir" value="D:\XTLBB\解包结果">
+    <button class="btn mini" onclick="browseOutDir()">浏览…</button>
+    <button class="btn" onclick="openOut()">打开</button>
+    <div class="progress">
+      <div class="progress-bar"><div class="fill" id="progFill"></div></div>
+      <span class="progress-text" id="progText">就绪</span>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn" onclick="doScan()">扫描全部</button>
+    <button class="btn primary" onclick="doExtract(false)">导出这个包</button>
+    <button class="btn" onclick="doExtract(true)">导出所有包</button>
+    <button class="btn" onclick="doAudit()">体检报告</button>
+    <button class="btn" onclick="doRepack()">打包回 AXP</button>
+    <button class="btn" onclick="doXzipUnpack()">XZIP 解包</button>
+    <button class="btn" onclick="doXzipPack()">XZIP 打包</button>
+    <button class="btn" onclick="doXzipOpen()">XZIP 预览</button>
+    <button class="btn" onclick="doMakePatch()">制作补丁(XZIP)</button>
+    <button class="btn" onclick="doCodec()">加解密</button>
+    <button class="btn danger" onclick="doCancel()">取消</button>
+  </div>
+
+  <div class="log-window" id="logWin"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- XZIP 条目解码预览 -->
+<div class="mask" id="xzMask">
+  <div class="modal">
+    <div class="modal-head"><span id="xzTitle">XZIP 预览</span><button class="btn" onclick="closeModal('xzMask')">关闭</button></div>
+    <div class="modal-body">
+      <div class="modal-meta" id="xzMeta"></div>
+      <div class="modal-pre" id="xzBody">加载中...</div>
+    </div>
+  </div>
+</div>
+
+<!-- 独立加解密 -->
+<div class="mask" id="cdMask">
+  <div class="modal">
+    <div class="modal-head"><span>加解密</span><button class="btn" onclick="closeModal('cdMask')">关闭</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <button class="btn primary" id="cdTabDec" onclick="cdTab('dec')">解开（变成能改的明文）</button>
+        <button class="btn" id="cdTabEnc" onclick="cdTab('enc')">加密回去（变成游戏能读的）</button>
+        <button class="btn" id="cdTabAdv" onclick="cdTab('adv')">高级</button>
+      </div>
+
+      <div class="form-row"><label id="cdInLabel">要解的文件/文件夹</label><input type="text" id="cdIn" placeholder="选文件或整个文件夹" oninput="codecAutoOut()"><button class="btn" onclick="codecBrowseIn()">选文件…</button><button class="btn" onclick="codecBrowseInDir()">选文件夹…</button></div>
+      <div class="form-row"><label>写成</label><input type="text" id="cdOut" placeholder="自动起好名，可改"><button class="btn" onclick="codecBrowseOut()">换个位置…</button></div>
+
+      <div id="cdPanDec">
+        <div class="cd-tip">选<b>整个文件夹</b>就一批全解（保持原来的目录结构和文件名，认不出加密的原样搬过去，文件夹照样完整）；选单个文件就只解那一个。<b>原文件一律不动</b>。</div>
+        <div class="form-row"><button class="btn primary" onclick="cdRun('dec')">解开</button><span style="font-size:11px;color:var(--faint)">文件夹大的会走一会儿，下面日志有进度</span></div>
+      </div>
+
+      <div id="cdPanEnc" style="display:none">
+        <div class="cd-tip">把改好的明文加密回去，游戏才认得。批量就选<b>明文文件夹</b> + 它对应的<b>原加密文件夹</b>（两边目录结构、文件名一样，按相对路径配对）；配不上的原样搬过去并单独报数。刚「解开」过的话这两格已经替你填好了。</div>
+        <div class="form-row"><label>原加密文件夹</label><input type="text" id="cdRef" placeholder="刚才解的那个（已自动填）"><button class="btn" onclick="codecBrowseRef()">选文件夹…</button><button class="btn mini" onclick="codecPreferEnc(true)">用刚解开的</button></div>
+        <div class="form-row"><button class="btn primary" onclick="cdRun('enc')">加密回去</button></div>
+        <div class="cd-tip">完整顺序：「解开」整个文件夹 → 改里面的明文（文件名别改）→ 回来点「加密回去」。</div>
+      </div>
+
+      <div id="cdPanAdv" style="display:none">
+        <div class="cd-tip">一般用不着。知道文件是哪种形态、要指定算法号或密钥相位时才进来。</div>
+        <div class="form-row"><label>方式</label>
+          <select id="cdMode" onchange="codecSync()">
+            <option value="block_decode">AXP 存储块 → 明文（块解码）</option>
+            <option value="block_encode">明文 → AXP 存储块（块加密，要 algo）</option>
+            <option value="container_decode">脚本加密容器 → Lua 明文（容器解码）</option>
+            <option value="container_encode">Lua 明文 → 脚本加密容器（容器加密，要模板）</option>
+            <option value="lzma_unwrap">拆开官方补丁的 LZMA 包裹</option>
+            <option value="lzma_wrap">打包成官方补丁的 LZMA 包裹</option>
+          </select>
+        </div>
+        <div class="form-row" id="cdAlgoRow"><label>算法号 algo</label><input type="number" id="cdAlgo" class="num-in" min="1" max="25" step="1" placeholder="1..25，加密成存储块必填"></div>
+        <div class="form-row" id="cdPosRow"><label>密钥相位 pos</label><input type="number" id="cdPos" class="num-in" min="0" step="1" placeholder="默认 0=补丁块；包内块按位置"></div>
+        <div class="form-row" id="cdTplRow"><label>容器模板</label><input type="text" id="cdTpl" placeholder="照抄容器头的现成容器文件"><button class="btn" onclick="codecBrowseTpl()">浏览…</button></div>
+        <div class="form-row"><button class="btn primary" onclick="codecRun()">按上面的方式处理</button></div>
+      </div>
+
+      <div class="cd-prog" id="cdProg"></div>
+      <div class="modal-result" id="cdResult">选文件或整个文件夹，点「解开」就行。</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';   // 同源：页面本身就是后端服务的，避免写死端口
+let currentPkg = null, allRows = [], filteredRows = [], rendered = 0;
+let fileMode = 'pkg';      // 右表当前显示什么：'pkg' = AXP 包条目，'xzip' = 补丁包条目
+let xzipPath = '';         // XZIP 预览选中的补丁包路径
+const PAGE = 150;
+const cache = {};
+let lastExport = {};
+try { lastExport = JSON.parse(localStorage.getItem('axp-last-export')||'{}'); } catch(e){}
+function rememberExport(pkg, dir) {
+  lastExport[pkg] = dir;
+  try { localStorage.setItem('axp-last-export', JSON.stringify(lastExport)); } catch(e){}
+}
+let lastLogN = 0, state_busy = false;
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._tm); t._tm = setTimeout(()=>t.classList.remove('show'), 1800);
+}
+function esc(s) {
+  if (s === null || s === undefined) s = '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+// 覆盖层面板：点空白处或按 Esc 关闭
+function openModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+['xzMask','cdMask'].forEach(id => {
+  document.getElementById(id).addEventListener('click', function(e) { if (e.target === this) closeModal(id); });
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') { closeModal('xzMask'); closeModal('cdMask'); }
+});
+function toggleTheme() {
+  const html = document.documentElement;
+  const light = html.getAttribute('data-theme') === 'light';
+  if (light) { html.removeAttribute('data-theme'); event.target.textContent='☀ 浅色'; }
+  else { html.setAttribute('data-theme','light'); event.target.textContent='🌙 深色'; }
+  try { localStorage.setItem('axp-theme', light ? 'dark' : 'light'); } catch(e){}
+}
+// 恢复上次主题
+try { if (localStorage.getItem('axp-theme')==='light') { document.documentElement.setAttribute('data-theme','light'); document.querySelector('.theme-btn').textContent='🌙 深色'; } } catch(e){}
+function fmt(n){return n.toLocaleString()}
+function setProg(cur, total, text) {
+  const pct = total ? Math.round(cur / total * 100) : 0;
+  document.getElementById('progFill').style.width = total ? pct + '%' : '0';
+  document.getElementById('progText').textContent =
+    total ? (pct + '% · ' + (text || (cur + '/' + total))) : (text || '就绪');
+}
+
+function renderLogs(logs) {
+  const el = document.getElementById('logWin');
+  if (logs.length > lastLogN) {
+    logs.slice(lastLogN).forEach(l => {
+      const div = document.createElement('div');
+      const m = l.match(/^\[(\d+:\d+:\d+)\]\s*(.*)/);
+      if (m) div.innerHTML = '<span class="ts">['+m[1]+']</span>'+m[2];
+      else div.textContent = l;
+      el.appendChild(div);
+    });
+    lastLogN = logs.length;
+    while (el.children.length > 80) el.removeChild(el.firstChild);
+  }
+  el.scrollTop = el.scrollHeight;
+}
+async function poll() {
+  try {
+    const d = await (await fetch(API+'/api/logs')).json();
+    renderLogs(d.logs);
+    if (d.progress.total) setProg(d.progress.current, d.progress.total, d.progress.text);
+    else if (!state_busy) setProg(0,0,'就绪');
+  } catch(e){}
+}
+
+async function rescan() {
+  const dir = document.getElementById('dataDir').value;
+  state_busy = true; setProg(0,0,'扫描中...');
+  for (let k in cache) delete cache[k];
+  try {
+    const d = await (await fetch(API+'/api/scan?dir='+encodeURIComponent(dir))).json();
+    renderPkgs(d.packages);
+    if (d.packages.length) loadFiles(d.packages[0].name);
+  } catch(e) { toast('后端未启动'); }
+  state_busy = false;
+}
+function doScan(){ rescan(); }
+
+function mkPkgRow(p, body, prepend) {
+  if (body.querySelector('tr[data-name="'+p.name+'"]')) {
+    body.querySelector('tr[data-name="'+p.name+'"]').remove();
+  }
+  const tr = document.createElement('tr');
+  tr.dataset.name = p.name;
+  tr.innerHTML = '<td>'+p.name+'</td><td class="num">'+fmt(p.entries)+'</td><td class="num">'+fmt(p.raw)+'</td><td class="num">'+fmt(p.plain)+'</td><td class="num">'+fmt(p.decodable)+'</td><td class="num">'+fmt(p.named)+'</td>';
+  tr.style.cursor = 'pointer';
+  tr.onclick = () => loadFiles(p.name);
+  if (prepend && body.firstChild) body.insertBefore(tr, body.firstChild);
+  else body.appendChild(tr);
+  return tr;
+}
+function renderPkgs(pkgs) {
+  const body = document.getElementById('pkgBody');
+  body.innerHTML = '';
+  pkgs.forEach(p => mkPkgRow(p, body, false));
+}
+
+// 打开单个包（秒开）：打包版走原生对话框；浏览器直开时手输路径
+async function openOne() {
+  let p = await nativePick('pick_file', 'all');
+  if (p === null) p = askPath('请输入 .axp 的完整路径：', 'D:\\XTLBB\\Data\\');
+  if (!p) return;
+  state_busy = true; setProg(0,0,'打开中...');
+  try {
+    const r = await fetch(API+'/api/open_pkg', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({path: p})});
+    const d = await r.json();
+    if (d.error) toast(d.error);
+    else {
+      const body = document.getElementById('pkgBody');
+      const hint = body.querySelector('.hint-row');
+      if (hint) hint.remove();
+      mkPkgRow(d, body, true);
+      loadFiles(d.name);
+      toast('已打开 '+d.name);
+    }
+  } catch(e) { toast('打开失败'); }
+  state_busy = false; setProg(0,0,'就绪');
+}
+
+function stDot(s) {
+  let cls = 'st-normal';
+  if (s.includes('脚本容器')) cls='st-mismatch';
+  else if (s.includes('改写')) cls='st-rewrite';
+  else if (s==='未解出') cls='st-opaque';
+  else if (s.includes('不一致')||s.includes('异常')) cls='st-bad';
+  else if (s==='无名字') cls='st-noname';
+  return '<span class="st-dot '+cls+'"></span>';
+}
+
+// 右表列定义随内容切换：AXP 包条目 5 列 / 补丁包条目 4 列
+const FILE_TBL_PKG = '<colgroup><col style="width:40%"><col style="width:22%"><col style="width:12%"><col style="width:13%"><col style="width:13%"></colgroup>'+
+  '<thead><tr><th>文件名</th><th>状态</th><th>形态</th><th class="num">存储</th><th class="num">内容</th></tr></thead>';
+const FILE_TBL_XZIP = '<colgroup><col style="width:52%"><col style="width:14%"><col style="width:17%"><col style="width:17%"></colgroup>'+
+  '<thead><tr><th>条目名</th><th>方法</th><th class="num">存储</th><th class="num">内容</th></tr></thead>';
+function setFileTable(mode) {
+  fileMode = mode;
+  const wrap = document.getElementById('fileWrap');
+  const tmp = document.createElement('div');
+  tmp.innerHTML = '<table>' + (mode === 'xzip' ? FILE_TBL_XZIP : FILE_TBL_PKG) +
+                  '<tbody id="fileBody"></tbody></table>';
+  wrap.replaceChild(tmp.firstChild, wrap.querySelector('table'));
+}
+function markSel(tr) {
+  document.querySelectorAll('#fileBody tr').forEach(x => x.classList.remove('sel'));
+  tr.classList.add('sel');
+}
+function renderRows(start, count) {
+  const body = document.getElementById('fileBody');
+  const end = Math.min(start+count, filteredRows.length);
+  const frag = document.createDocumentFragment();
+  for (let i=start; i<end; i++) {
+    const f = filteredRows[i];
+    const tr = document.createElement('tr');
+    tr.style.cursor = 'pointer';
+    if (fileMode === 'xzip') {
+      tr.dataset.i = f.i;
+      tr.innerHTML = '<td title="'+esc(f.name)+'">'+esc(f.name)+'</td><td>'+esc(f.method)+'</td><td class="num">'+fmt(f.csize)+'</td><td class="num">'+fmt(f.usize)+'</td>';
+      tr.onclick = function() { markSel(this); xzipPreview(f.i); };
+    } else {
+      tr.dataset.name = f.name;
+      tr.innerHTML = '<td>'+f.name+'</td><td>'+stDot(f.status)+f.status+'</td><td>'+f.form+'</td><td class="num">'+fmt(f.stored)+'</td><td class="num">'+fmt(f.content)+'</td>';
+      tr.onclick = function() { markSel(this); };
+    }
+    frag.appendChild(tr);
+  }
+  body.appendChild(frag);
+  rendered = end;
+}
+function resetFiles() { document.getElementById('fileBody').innerHTML = ''; rendered = 0; }
+
+document.getElementById('fileWrap').addEventListener('scroll', function() {
+  if (this.scrollTop + this.clientHeight >= this.scrollHeight - 40 && rendered < filteredRows.length)
+    renderRows(rendered, PAGE);
+});
+
+function applyFilter() {
+  const kw = document.getElementById('filterKw').value.toLowerCase();
+  const st = document.getElementById('filterStatus').value;
+  filteredRows = allRows.filter(f => {
+    if (st!=='全部' && f.status!==st) return false;
+    if (kw && !f.name.toLowerCase().includes(kw)) return false;
+    return true;
+  });
+  resetFiles(); renderRows(0, PAGE);
+}
+document.getElementById('filterKw').addEventListener('input', applyFilter);
+document.getElementById('filterStatus').addEventListener('change', applyFilter);
+
+async function loadFiles(pkgName) {
+  currentPkg = pkgName;
+  document.querySelectorAll('#pkgBody tr').forEach(tr => tr.classList.toggle('sel', tr.dataset.name===pkgName));
+  document.getElementById('filterKw').value = '';
+  document.getElementById('filterStatus').value = '全部';
+  if (fileMode !== 'pkg') setFileTable('pkg');   // 从 XZIP 预览切回包条目
+  resetFiles(); allRows = []; filteredRows = [];
+
+  if (cache[pkgName]) {
+    const c = cache[pkgName];
+    allRows = c.rows; filteredRows = c.rows;
+    renderRows(0, PAGE);
+    document.getElementById('fileWrap').scrollTop = 0;
+    setStatus(pkgName, c.stats);
+    return;
+  }
+  document.getElementById('fileBody').innerHTML = '<tr class="loading"><td colspan="5">加载中...</td></tr>';
+  try {
+    const d = await (await fetch(API+'/api/files?pkg='+encodeURIComponent(pkgName))).json();
+    document.getElementById('fileBody').innerHTML = '';
+    allRows = d.rows; filteredRows = d.rows; cache[pkgName] = d;
+    renderRows(0, PAGE);
+    document.getElementById('fileWrap').scrollTop = 0;
+    setStatus(pkgName, d.stats);
+  } catch(e) {
+    document.getElementById('fileBody').innerHTML = '<tr class="loading"><td colspan="5">加载失败</td></tr>';
+  }
+}
+
+function setStatus(pkg, s) {
+  document.getElementById('fileStatus').innerHTML =
+    '<span><b>'+pkg+'</b> · '+fmt(s.entries)+' 条</span>' +
+    '<span>原文 <b>'+fmt(s.raw)+'</b></span>' +
+    '<span>明文 <b>'+fmt(s.plain)+'</b></span>' +
+    '<span>可解码 <b>'+fmt(s.decodable)+'</b></span>' +
+    '<span>未解出 <b>'+fmt(s.undecoded)+'</b></span>' +
+    '<span>有名 <b>'+fmt(s.named)+'</b></span>';
+}
+
+// pywebview 原生对话框（打包后可用；浏览器直开时提示）
+// 约定：nativePick 返回 null = 无原生对话框（浏览器里跑），改用手输路径；返回 '' = 用户取消了对话框
+async function nativePick(method, arg) {
+  try {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api[method]) {
+      return await window.pywebview.api[method](arg);
+    }
+  } catch(e) {}
+  return null;
+}
+function askPath(msg, def) {
+  const v = prompt(msg, def || '');
+  return v ? v.trim() : '';
+}
+function outDirValue() {
+  return document.getElementById('outDir').value.replace(/[\\\/]+$/,'');
+}
+
+async function doExtract(all) {
+  if (!all && !currentPkg) { toast('先选包'); return; }
+  const outdir = document.getElementById('outDir').value;
+  const enc = document.getElementById('chkEnc').checked;
+  state_busy = true;
+  toast(all ? '导出全部包...' : '导出 '+currentPkg+'...');
+  try {
+    const r = await fetch(API+'/api/extract', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({pkg: currentPkg, all: all, outdir: outdir, include_enc: enc})});
+    const d = await r.json();
+    if (d.cancelled) toast('已取消');
+    else {
+      toast(all ? '全部导出完成：'+(d.total_written||0)+' 个文件' : '导出完成：'+(d.summary&&d.summary[0]?d.summary[0].written:0)+' 个文件');
+      if (!all && currentPkg) rememberExport(currentPkg, outdir.replace(/[\\\/]+$/,'')+'\\'+currentPkg.replace(/\.axp$/i,''));
+    }
+  } catch(e) { toast('导出失败'); }
+  state_busy = false; poll();
+}
+async function doAudit() {
+  if (!currentPkg) { toast('先选包'); return; }
+  toast('体检中...');
+  try {
+    const d = await (await fetch(API+'/api/audit?pkg='+encodeURIComponent(currentPkg))).json();
+    toast('体检完成：'+(d.issue_total||0)+' 个问题'); poll();
+  } catch(e) { toast('体检失败'); }
+}
+async function doCancel() {
+  await fetch(API+'/api/cancel', {method:'POST'});
+  toast('已取消'); state_busy = false;
+}
+async function openOut() {
+  await fetch(API+'/api/open', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({dir: document.getElementById('outDir').value})});
+}
+async function pickDir() {
+  let d = await nativePick('pick_dir');
+  if (d === null) d = askPath('输入要扫描的目录完整路径：', document.getElementById('dataDir').value);
+  if (d) { document.getElementById('dataDir').value = d; rescan(); }
+}
+
+// ===== 路径输入框旁的「浏览…」：打包版用原生对话框，浏览器直开回退手输 =====
+async function browseDir(inputId, msg, after) {
+  const el = document.getElementById(inputId);
+  let d = await nativePick('pick_dir', el.value);
+  if (d === null) d = askPath(msg, el.value);
+  if (!d) return;              // 取消：不改
+  el.value = d;
+  if (after) after();
+}
+function browseDataDir() { browseDir('dataDir', '输入 Data 目录的完整路径：', rescan); }
+function browseOutDir()  { browseDir('outDir', '输入导出目录的完整路径：'); }
+async function browseFile(inputId, kind, msg, def) {
+  const el = document.getElementById(inputId);
+  let p = await nativePick('pick_file', kind || 'all');
+  if (p === null) p = askPath(msg, def || '');
+  if (!p) return '';
+  el.value = p;
+  return p;
+}
+
+// ===== 打包回 AXP：选文件夹，改过的文件按名字打回包里，对不上号的文件真正新增进包（原包不动） =====
+// 列表里没开包也能打：直接选 .axp，把 path 一起传过去，后端当场打开
+async function doRepack() {
+  let pkgPath = '';
+  if (!currentPkg) {
+    let p = await nativePick('pick_file', 'all');
+    if (p === null) p = askPath('打包回哪个 .axp？（完整路径）', document.getElementById('dataDir').value+'\\');
+    if (!p) return;
+    pkgPath = p;
+  }
+  const pkgName = currentPkg || pkgPath.split(/[\\\/]/).pop();
+  const stem = pkgName.replace(/\.axp$/i,'');
+  const suggest = lastExport[pkgName] || (outDirValue()+'\\'+stem);
+  let folder = await nativePick('pick_dir', suggest);
+  if (folder === null) folder = askPath('要把哪个文件夹打包回 AXP？（导出后改过文件的文件夹）', suggest);
+  if (!folder) return;
+  const defName = stem+'_repack.axp';
+  let outPath = await nativePick('pick_save', defName);
+  if (outPath === null) outPath = askPath('生成的新 AXP 保存到哪里？（完整路径）', outDirValue()+'\\'+defName);
+  if (!outPath) return;
+  state_busy = true; toast('打包中（核对文件夹里的改动）...');
+  try {
+    const req = {pkg: pkgName, folder: folder, out_path: outPath};
+    if (pkgPath) req.path = pkgPath;
+    const r = await fetch(API+'/api/repack_folder', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(req)});
+    const d = await r.json();
+    if (d.error) toast(d.error);
+    else if (d.verify && d.verify.length) toast('打包完成，但有校验警告：'+d.verify[0]);
+    else {
+      let msg = '打包完成：改动 '+d.matched+' 条'+(d.added_new?' + 新增 '+d.added_new+' 条':'')+
+                ' → '+outPath.split(/[\\\/]/).pop();
+      const nsk = (d.skipped_files||[]).length + (d.script_skips||[]).length;
+      if (nsk) msg += '（'+nsk+' 个文件被跳过，看日志）';
+      else if (d.verify_pending) msg += '（自检后台跑，结果写日志）';
+      toast(msg);
+    }
+  } catch(e) { toast('打包失败'); }
+  state_busy = false; poll();
+}
+
+// ===== XZIP 补丁包解包 =====
+async function doXzipUnpack() {
+  let xp = await nativePick('pick_file', 'xzip');
+  if (xp === null) xp = askPath('要解包的 .xzip 补丁包完整路径：');
+  if (!xp) return;
+  let outdir = await nativePick('pick_dir');
+  if (outdir === null) outdir = askPath('解包输出到哪个目录？（完整路径）', outDirValue()+'\\XZIP解包');
+  if (!outdir) return;
+  state_busy = true; toast('补丁包解包中...');
+  try {
+    const r = await fetch(API+'/api/xzip_unpack', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({path: xp, outdir: outdir})});
+    const d = await r.json();
+    if (d.error) toast(d.error);
+    else toast('解包完成：'+d.written+' 个文件'+(d.crc_bad?'（CRC 异常 '+d.crc_bad+'）':''));
+  } catch(e) { toast('解包失败'); }
+  state_busy = false; poll();
+}
+
+// ===== XZIP 补丁包打包 =====
+async function doXzipPack() {
+  let srcdir = await nativePick('pick_dir');
+  if (srcdir === null) srcdir = askPath('把哪个目录打成 .xzip 补丁包？（完整路径）');
+  if (!srcdir) return;
+  const base = srcdir.replace(/[\\\/]+$/,'').split(/[\\\/]/).pop() || 'patch';
+  let outPath = await nativePick('pick_save', base+'.xzip');
+  if (outPath === null) outPath = askPath('补丁包保存到哪里？（完整路径）', outDirValue()+'\\'+base+'.xzip');
+  if (!outPath) return;
+  state_busy = true; toast('补丁包打包中...');
+  try {
+    const r = await fetch(API+'/api/xzip_pack', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({srcdir: srcdir, out_path: outPath})});
+    const d = await r.json();
+    if (d.error) toast(d.error);
+    else toast('打包完成：'+d.written+' 个文件 → '+outPath.split(/[\\\/]/).pop());
+  } catch(e) { toast('打包失败'); }
+  state_busy = false; poll();
+}
+
+// ===== 制作补丁(XZIP)：把改过/新增的文件按官方格式打成 .xzip 补丁 =====
+async function doMakePatch() {
+  if (!currentPkg) { toast('先打开一个包'); return; }
+  const stem = currentPkg.replace(/\.axp$/i,'');
+  const suggest = lastExport[currentPkg] || (outDirValue()+'\\'+stem);
+  let folder = await nativePick('pick_dir', suggest);
+  if (folder === null) folder = askPath('要把哪个文件夹的改动做成补丁？（改过/新增文件的文件夹）', suggest);
+  if (!folder) return;
+  const defName = stem+'_补丁.xzip';
+  let outPath = await nativePick('pick_save', defName);
+  if (outPath === null) outPath = askPath('补丁保存到哪里？（完整路径）', outDirValue()+'\\'+defName);
+  if (!outPath) return;
+  state_busy = true; toast('制作补丁中（核对文件）...');
+  try {
+    const r = await fetch(API+'/api/make_patch', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({pkg: currentPkg, folder: folder, out_path: outPath})});
+    const d = await r.json();
+    if (d.error) toast(d.error);
+    else {
+      let msg = '补丁完成：覆盖 '+d.overridden+' + 新增 '+d.added+' → '+outPath.split(/[\\\/]/).pop();
+      const nsk = (d.skipped||[]).length;
+      if (nsk) msg += '（'+nsk+' 个被跳过，看日志）';
+      toast(msg);
+    }
+  } catch(e) { toast('制作补丁失败'); }
+  state_busy = false; poll();
+}
+
+// ===== XZIP 预览：右边表格区列补丁包条目，点一行看解码后的内容（不落盘） =====
+async function doXzipOpen() {
+  let xp = await nativePick('pick_file', 'xzip');
+  if (xp === null) xp = askPath('要预览的 .xzip 补丁包完整路径：', outDirValue()+'\\');
+  if (!xp) return;
+  state_busy = true; setProg(0,0,'读取补丁包条目...');
+  try {
+    const r = await fetch(API+'/api/xzip_list', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({path: xp})});
+    const d = await r.json();
+    if (d.error) toast(d.error);
+    else {
+      xzipPath = d.path;
+      setFileTable('xzip');
+      document.getElementById('filterKw').value = '';
+      document.getElementById('filterStatus').value = '全部';
+      allRows = d.entries || []; filteredRows = allRows;
+      resetFiles(); renderRows(0, PAGE);
+      document.getElementById('fileWrap').scrollTop = 0;
+      document.getElementById('fileStatus').innerHTML =
+        '<span><b>'+esc(d.name)+'</b> · '+fmt(filteredRows.length)+' 条</span>' +
+        '<span>包体 <b>'+fmt(d.size)+'</b> 字节</span>' +
+        '<span>点一行看解码内容</span>';
+      toast('已读取 '+d.name+'：'+filteredRows.length+' 条');
+    }
+  } catch(e) { toast('读取补丁包失败'); }
+  state_busy = false; setProg(0,0,'就绪'); poll();
+}
+
+async function xzipPreview(i) {
+  if (!xzipPath) return;
+  const meta = document.getElementById('xzMeta'), body = document.getElementById('xzBody');
+  document.getElementById('xzTitle').textContent = 'XZIP 预览 · 条目 '+i;
+  meta.innerHTML = '<span>解码中...</span>'; body.textContent = '';
+  openModal('xzMask');
+  state_busy = true; setProg(0,0,'解码条目 '+i+'...');
+  try {
+    const r = await fetch(API+'/api/xzip_preview', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({path: xzipPath, i: i, limit: 4096})});
+    const d = await r.json();
+    if (d.error) { meta.innerHTML = '<span style="color:#f8b4b4">'+esc(d.error)+'</span>'; toast(d.error); }
+    else {
+      document.getElementById('xzTitle').textContent = 'XZIP 预览 · '+d.name;
+      meta.innerHTML =
+        '<span>形态 <b>'+esc(d.kind)+'</b></span>' +
+        '<span>方法 <b>'+esc(d.method)+'</b></span>' +
+        '<span>包裹 '+fmt(d.wrapped)+' → 解开 <b>'+fmt(d.unwrapped)+'</b> 字节</span>' +
+        '<span>CRC <b>'+(d.crc_ok ? '一致' : '不一致')+'</b></span>' +
+        (d.note ? '<span>说明 <b>'+esc(d.note)+'</b></span>' : '');
+      body.textContent = (d.text !== null && d.text !== undefined) ? d.text
+                        : (d.hex || '（这一条没有内容）');
+    }
+  } catch(e) { meta.innerHTML = '<span style="color:#f8b4b4">解码失败</span>'; toast('解码失败（后端没响应？）'); }
+  state_busy = false; setProg(0,0,'就绪');
+}
+
+// ===== 独立加解密：默认只两条路——解开 / 加密回去（后端自动认格式） =====
+const CODEC_FIELDS = {   // 高级面板里每种 mode 需要哪些额外字段
+  block_decode: ['pos'],
+  block_encode: ['algo', 'pos'],
+  container_decode: [],
+  container_encode: ['template'],
+  lzma_unwrap: [],
+  lzma_wrap: []
+};
+let cdTabNow = 'dec';    // 'dec' 解开 | 'enc' 加密回去 | 'adv' 高级
+const CD_LABEL = {dec: '文件或文件夹', enc: '我的明文', adv: '输入文件'};
+const CD_DEFOUT = {dec: '_解密', enc: '_加密'};
+let cdOutAuto = '';      // 自动填的输出路径（用户手改过就不再覆盖）
+let CD_LAST = {in: '', out: ''};   // 刚才「解开」的原件和产物，切到加密回去时接手
+
+function doCodec() { cdTab(cdTabNow); openModal('cdMask'); }
+
+// 刚解开的明文自动填进「加密回去」，用户只要改完文件再点一下
+function codecPreferEnc(force) {
+  if (!CD_LAST.out) return;
+  if (!force && document.getElementById('cdRef').value.trim()) return;
+  document.getElementById('cdIn').value = CD_LAST.out;
+  document.getElementById('cdRef').value = CD_LAST.in;
+  cdOutAuto = '';
+  document.getElementById('cdOut').value = '';   // 清空才会按新明文重新起名
+  codecAutoOut();
+}
+
+function cdTab(t) {
+  cdTabNow = t;
+  document.getElementById('cdPanDec').style.display = t === 'dec' ? 'block' : 'none';
+  document.getElementById('cdPanEnc').style.display = t === 'enc' ? 'block' : 'none';
+  document.getElementById('cdPanAdv').style.display = t === 'adv' ? 'block' : 'none';
+  document.getElementById('cdInLabel').textContent = CD_LABEL[t];
+  [['cdTabDec','dec'], ['cdTabEnc','enc'], ['cdTabAdv','adv']].forEach(function (p) {
+    document.getElementById(p[0]).className = 'btn' + (p[1] === t ? ' primary' : '');
+  });
+  if (t === 'enc') codecPreferEnc(false);
+  codecSync();
+}
+
+function codecSync() {
+  const on = cdTabNow === 'adv' ? (CODEC_FIELDS[document.getElementById('cdMode').value] || []) : [];
+  document.getElementById('cdAlgoRow').style.display = on.includes('algo') ? 'flex' : 'none';
+  document.getElementById('cdPosRow').style.display = on.includes('pos') ? 'flex' : 'none';
+  document.getElementById('cdTplRow').style.display = on.includes('template') ? 'flex' : 'none';
+  codecAutoOut();
+}
+function codecDefOut(src) {
+  if (!src) return '';
+  src = src.replace(/[\\\/]+$/, '');          // 选文件夹回来常带尾巴的斜杠
+  const at = Math.max(src.lastIndexOf('\\'), src.lastIndexOf('/'));
+  const dir = src.slice(0, at + 1), base = src.slice(at + 1);
+  const stem = base.replace(/\.[^.]+$/, ''), ext = base.slice(stem.length);
+  const tail = CD_DEFOUT[cdTabNow] ||
+    (document.getElementById('cdMode').value.indexOf('decode') >= 0 ||
+     document.getElementById('cdMode').value === 'lzma_unwrap' ? '_解密' : '_加密');
+  // 先把上一次自动加的后缀去掉，再按当前动作加：不会叠成 xxx_解密_加密，也不会和输入同名
+  const stem2 = stem.replace(/_解密$|_加密$/, '');
+  let name = stem2 + tail + ext;
+  if (name === base) name = stem2 + tail + '2' + ext;
+  return dir + name;
+}
+function codecAutoOut() {
+  const el = document.getElementById('cdOut');
+  if (el.value.trim() && el.value !== cdOutAuto) return;   // 用户自己填过，不动
+  const next = codecDefOut(document.getElementById('cdIn').value.trim());
+  cdOutAuto = next;
+  if (next) el.value = next;
+}
+async function codecBrowseIn() {
+  const p = await browseFile('cdIn', 'all', CD_LABEL[cdTabNow] + '：完整路径',
+                             document.getElementById('dataDir').value+'\\');
+  if (p) codecAutoOut();
+}
+async function codecBrowseInDir() {
+  await browseDir('cdIn', '要解哪个文件夹？（整个文件夹一批处理）', function () { codecAutoOut(); });
+}
+function codecLooksDir(p) {
+  p = (p || '').replace(/[\\\/]+$/, '');
+  const base = p.split(/[\\\/]/).pop() || '';
+  return base.indexOf('.') < 0;      // 末段没有扩展名 = 当文件夹处理
+}
+async function codecBrowseOut() {
+  const el = document.getElementById('cdOut');
+  const inPath = document.getElementById('cdIn').value.trim();
+  const def = codecDefOut(inPath) || (outDirValue()+'\\输出');
+  if (codecLooksDir(inPath)) {                  // 批量：输出是个文件夹
+    let d = await nativePick('pick_dir', el.value || def);
+    if (d === null) d = askPath('结果写到哪个文件夹？', el.value || def);
+    if (!d) return;
+    el.value = d.replace(/[\\\/]+$/, ''); cdOutAuto = el.value;
+    return;
+  }
+  let p = await nativePick('pick_save', def.split(/[\\\/]/).pop());
+  if (p === null) p = askPath('结果写到哪里？（完整路径）', el.value || def);
+  if (!p) return;
+  el.value = p; cdOutAuto = p;
+}
+async function codecBrowseRef() {
+  await browseDir('cdRef', '原来的加密文件夹（和明文那批同结构，只照格式不动它）：');
+}
+async function codecBrowseTpl() {
+  await browseFile('cdTpl', 'all', '容器模板：照抄容器头的现成容器文件完整路径：',
+                   document.getElementById('dataDir').value+'\\');
+}
+function codecFail(msg) {
+  const res = document.getElementById('cdResult');
+  res.classList.add('err'); res.textContent = '失败：' + msg;
+  toast('处理失败');
+}
+function codecNeedPath(el, what) {
+  const p = el.value.trim();
+  if (!p) toast(what);
+  return p;
+}
+// 一键跑：'dec' = 解开，'enc' = 加密回去；文件或文件夹都行，后端自己认
+async function cdRun(t) {
+  const req = {mode: t === 'dec' ? 'auto_decode' : 'auto_encode',
+               path: codecNeedPath(document.getElementById('cdIn'),
+                                   t === 'dec' ? '先选要解的文件或文件夹' : '先选你改好的明文（文件或文件夹）'),
+               out: codecNeedPath(document.getElementById('cdOut'), '先选写成哪里')};
+  if (t === 'enc') {
+    req.reference = codecNeedPath(document.getElementById('cdRef'),
+                                  '再选一次原来的加密文件或文件夹');
+    if (!req.reference) return;
+  }
+  if (!req.path || !req.out) return;
+  await codecPost(req, t === 'dec' ? '已解开' : '已加密回去');
+}
+async function codecRun() {   // 高级：按选定的方式跑
+  const sel = document.getElementById('cdMode');
+  const mode = sel.value;
+  const path = codecNeedPath(document.getElementById('cdIn'), '先选输入文件');
+  const out = codecNeedPath(document.getElementById('cdOut'), '先选输出文件');
+  if (!path || !out) return;
+  const req = {mode: mode, path: path, out: out};
+  if (mode === 'block_encode') {
+    const a = parseInt(document.getElementById('cdAlgo').value);
+    if (!a) { toast('加密成存储块要给算法号 algo'); return; }
+    req.algo = a;
+  }
+  if (mode === 'block_decode' || mode === 'block_encode') {
+    const p = parseInt(document.getElementById('cdPos').value);
+    if (p) req.pos = p;
+  }
+  if (mode === 'container_encode') {
+    const t = document.getElementById('cdTpl').value.trim();
+    if (!t) { toast('容器加密要给一个现成容器文件当模板'); return; }
+    req.template = t;
+  }
+  await codecPost(req, sel.options[sel.selectedIndex].text + ' 完成');
+}
+const CD_KIND = {container: '脚本容器', block: 'AXP 存储块', lzma: '官方补丁的 LZMA 包裹',
+                 raw: '原样（没认头）', plain: '明文'};
+let cdProgTimer = null;
+async function cdTick() {
+  try {
+    const d = await (await fetch(API+'/api/logs')).json();
+    const p = d.progress || {};
+    if (p.total) document.getElementById('cdProg').textContent =
+      '进行中 ' + p.current + '/' + p.total + '：' + (p.text || '');
+  } catch(e) {}
+}
+function codecDirHtml(d) {
+  const k = d.by_kind || {}, parts = [];
+  Object.keys(k).forEach(function (x) { parts.push((CD_KIND[x] || x) + ' ' + k[x]); });
+  let s = '共 <b>' + d.total + '</b> 个 · 处理 ' + d.written + '（' + (parts.join('、') || '无') + '）';
+  if (d.plain_copied) s += ' · 本来就是明文，照搬 ' + d.plain_copied;
+  if (d.plain_ref) s += ' · 那边也没加密，照搬 ' + d.plain_ref;
+  if (d.already_encrypted) s += ' · 已经是加密件，照搬 ' + d.already_encrypted;
+  if ((d.unmatched || []).length) s += ' · 配不上样子，照搬 ' + d.unmatched.length;
+  if (d.crc_bad) s += ' · <b style="color:#f8b4b4">校验没对上 ' + d.crc_bad + '</b>';
+  if ((d.errors || []).length) s += ' · <b style="color:#f8b4b4">失败 ' + d.errors.length + '</b>';
+  if (d.cancelled) s += ' · <b>已取消</b>';
+  s += '<br>写到：' + esc(d.out_dir) + '（目录结构和文件名原样）';
+  (d.unmatched || []).slice(0, 5).forEach(function (u) { s += '<br>没配上：' + esc(u); });
+  (d.errors || []).slice(0, 5).forEach(function (e) {
+    s += '<br>失败：' + esc(e.file) + ' —— ' + esc(e.error);
+  });
+  if ((d.unmatched || []).length > 5 || (d.errors || []).length > 5) s += '<br>……其余看底部日志';
+  return s;
+}
+async function codecPost(req, doneLabel) {
+  const res = document.getElementById('cdResult'), prog = document.getElementById('cdProg');
+  state_busy = true; setProg(0,0,'加解密处理中...');
+  res.classList.remove('err'); res.textContent = '处理中...'; prog.textContent = '准备中...';
+  if (req.mode.indexOf('auto') === 0) { cdTick(); cdProgTimer = setInterval(cdTick, 700); }
+  try {
+    const r = await fetch(API+'/api/codec', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(req)});
+    let d = null;
+    try { d = await r.json(); } catch(e) {}
+    if (!d) codecFail('接口异常（HTTP '+r.status+'）');
+    else if (d.error) codecFail(d.error);
+    else if (d.kind === 'dir') {
+      res.classList.remove('err');
+      if (req.mode === 'auto_decode') CD_LAST = {in: req.path, out: d.out_dir};
+      res.innerHTML = '<b>' + doneLabel + '（整个文件夹）</b><br>' + codecDirHtml(d);
+      toast(doneLabel + '：' + d.written + '/' + d.total + ' 个 → ' + String(d.out_dir).split(/[\\\/]/).pop());
+    } else {
+      res.classList.remove('err');
+      if (req.mode === 'auto_decode') CD_LAST = {in: req.path, out: d.out};
+      res.innerHTML = doneLabel + ' · 形态 <b>'+(CD_KIND[d.kind] || esc(d.kind))+'</b>'+
+        ' · 进 '+fmt(d.in_bytes)+' → 出 '+fmt(d.out_bytes)+' 字节'+
+        (d.crc_ok === true ? ' · <b style="color:#7ddc9a">校验对上</b>' : '') +
+        (d.crc_ok === false ? ' · <b style="color:#f8b4b4">校验没对上，看说明</b>' : '') +
+        '<br>写到：'+esc(d.out)+
+        (d.note ? '<br>说明：'+esc(d.note) : '');
+      toast(doneLabel+'：'+fmt(d.out_bytes)+' 字节 → '+String(d.out).split(/[\\\/]/).pop());
+    }
+  } catch(e) { codecFail('后端没有响应'); }
+  if (cdProgTimer) { clearInterval(cdProgTimer); cdProgTimer = null; }
+  prog.textContent = '';
+  state_busy = false; setProg(0,0,'就绪'); poll();
+}
+// 打开面板前先把字段显隐同步一次（默认「解开」页不需要额外字段）
+cdTab('dec');
+
+// 启动不再自动扫全库（23 包要近一分钟）：默认空状态，开单包秒开、扫全库按需点
+document.getElementById('pkgBody').innerHTML =
+  '<tr class="hint-row"><td colspan="6" style="color:#8a8f98;padding:10px 4px">' +
+  '点「打开 AXP 文件…」开单个包（秒开）；要整目录一起看，按底部「扫描全部」。<br>' +
+  '打包回 AXP：选你导出后改过的整个文件夹，按文件名打回包里，对不上名字的文件会真正新增进包；没开包也能直接选 .axp 打。<br>' +
+  '.xzip 补丁用「XZIP 解包 / 打包」，想先看内容点「XZIP 预览」；加解密点「加解密」→ 选<b>整个文件夹</b>点「解开」，改完点「加密回去」（格式自动认，目录结构和文件名不变）。</td></tr>';
+setProg(0,0,'就绪');
+setInterval(poll, 800);
+</script>
+</body>
+</html>

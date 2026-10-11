@@ -1,0 +1,29 @@
+AXP 解包工具 源码包 — 自检记录
+快照时间：2026-10-11 14:26
+
+一、快照清单（拍照时两遍 md5 确认文件没有在改；拷入本包后逐文件复验一致）
+server.py            50,103 字节  md5 5d9e55e01bf15b839db01f1a52cf258f
+axp-tool.html        52,058 字节  md5 1d02495b80249c3f55ebe0a3a74fb4d3
+axpcore.py           39,950 字节  md5 beb88d66a226e5772bb4f0beaab335f5
+packcore.py          83,509 字节  md5 a5b80b7d788405d8f1bf78931ff849e6
+scriptcodec.py        7,894 字节  md5 c0c234decbef9754e97b054949f9532d
+axpcodex.py          12,355 字节  md5 0e63897d34957fde9a108b92fed2c023
+axp_build.py         32,390 字节  md5 99a82f4fae07256a70c5e1a74b67ed13
+axp_tables.bin        4,096 字节  md5 c14115641e8dc4929f77352c2238eeaf
+AXP解包工具.spec          896 字节  md5 781d4bbf69da8d3f400488fb3851c3bf
+icon.ico            102,139 字节  md5 c10229e9d095359f23c4a01140e6a783
+
+二、与发布包 v6 的关系
+- v6 的 exe（md5 94ba55d84bbe67c760ba88e6974de06b）于 2026-10-11 14:21 构建；
+  其构建所用的 server.py / axp-tool.html 与本快照逐字节相同（两文件此后未再改动）。
+  即：本源码 = 发布包 v6 的源码。
+
+三、自检（全部在本包副本的独立目录里实测，不碰开发目录）
+1. 依赖导入 + py_compile：6 个 .py 全过（Python 3.13.5，flask 3.1.2 / pywebview 6.2.1）；
+2. HTTP 冒烟：GET / → 200；open_pkg 打开 Model4.axp → 54 条；files 列表 54 行；
+   export 写出 54 个文件（13.5 MB，跳过 0，错误 0）；
+3. 后端测试 test_codec_auto.py（单文件 63 项 + 批量 13 项）：全部通过
+   —— 含混合目录（容器/存储块/明文）13 个文件整体加密回去逐字节还原。
+
+四、zip 完整性
+- zip 生成后解压到独立目录，14 个文件逐文件 sha256 与 SHA256SUMS.txt 全部一致（清单本身除外）。
