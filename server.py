@@ -1080,10 +1080,11 @@ class Api:
 
 if __name__ == '__main__':
     import threading, webview
-    log('AXP 解包工具启动中...')
-    t = threading.Thread(target=lambda: app.run(host='127.0.0.1', port=5000, debug=False), daemon=True)
+    PORT = int(os.environ.get('AXP_PORT', '5000'))   # 端口可配，方便本机同时开两份做对照
+    log('AXP 解包工具启动中...（端口 %d）' % PORT)
+    t = threading.Thread(target=lambda: app.run(host='127.0.0.1', port=PORT, debug=False), daemon=True)
     t.start()
     window = webview.create_window('AXP 解包工具 — 天龙八部',
-        'http://127.0.0.1:5000', width=1280, height=820, min_size=(1000, 650),
+        'http://127.0.0.1:%d' % PORT, width=1280, height=820, min_size=(1000, 650),
         js_api=Api())
     webview.start()

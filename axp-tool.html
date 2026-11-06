@@ -576,7 +576,7 @@ async function browseFile(inputId, kind, msg, def) {
 
 // ===== 打包回 AXP：选文件夹，改过的文件按名字打回包里，对不上号的文件真正新增进包（原包不动） =====
 // 列表里没开包也能打：直接选 .axp，把 path 一起传过去，后端当场打开
-async function doRepack() {
+async function doRepack(preFolder) {
   let pkgPath = '';
   if (!currentPkg) {
     let p = await nativePick('pick_file', 'all');
@@ -587,8 +587,11 @@ async function doRepack() {
   const pkgName = currentPkg || pkgPath.split(/[\\\/]/).pop();
   const stem = pkgName.replace(/\.axp$/i,'');
   const suggest = lastExport[pkgName] || (outDirValue()+'\\'+stem);
-  let folder = await nativePick('pick_dir', suggest);
-  if (folder === null) folder = askPath('要把哪个文件夹打包回 AXP？（导出后改过文件的文件夹）', suggest);
+  let folder = preFolder;
+  if (!folder) {
+    folder = await nativePick('pick_dir', suggest);
+    if (folder === null) folder = askPath('要把哪个文件夹打包回 AXP？（导出后改过文件的文件夹）', suggest);
+  }
   if (!folder) return;
   const defName = stem+'_repack.axp';
   let outPath = await nativePick('pick_save', defName);
@@ -752,6 +755,7 @@ const CD_LABEL = {dec: '文件或文件夹', enc: '我的明文', adv: '输入�
 const CD_DEFOUT = {dec: '_解密', enc: '_加密'};
 let cdOutAuto = '';      // 自动填的输出路径（用户手改过就不再覆盖）
 let CD_LAST = {in: '', out: ''};   // 刚才「解开」的原件和产物，切到加密回去时接手
+let CD_LAST_DIR = '';              // 刚才批量解开出的文件夹（可以直接接着打包回 AXP）
 
 function doCodec() { cdTab(cdTabNow); openModal('cdMask'); }
 
@@ -764,6 +768,13 @@ function codecPreferEnc(force) {
   cdOutAuto = '';
   document.getElementById('cdOut').value = '';   // 清空才会按新明文重新起名
   codecAutoOut();
+}
+
+// 刚解开的文件夹可以直接接着打包回 AXP（改完文件点这个）
+function codecToRepack() {
+  if (!CD_LAST_DIR) return;
+  closeModal('cdMask');
+  doRepack(CD_LAST_DIR);
 }
 
 function cdTab(t) {
@@ -935,8 +946,14 @@ async function codecPost(req, doneLabel) {
     else if (d.error) codecFail(d.error);
     else if (d.kind === 'dir') {
       res.classList.remove('err');
-      if (req.mode === 'auto_decode') CD_LAST = {in: req.path, out: d.out_dir};
-      res.innerHTML = '<b>' + doneLabel + '（整个文件夹）</b><br>' + codecDirHtml(d);
+      if (req.mode === 'auto_decode') {
+        CD_LAST = {in: req.path, out: d.out_dir};
+        CD_LAST_DIR = d.out_dir;
+      }
+      res.innerHTML = '<b>' + doneLabel + '（整个文件夹）</b><br>' + codecDirHtml(d) +
+        (req.mode === 'auto_decode'
+          ? '<div style="margin-top:7px"><button class="btn" onclick="codecToRepack()">' +
+            '改完这个文件夹 → 打包回 AXP…</button></div>' : '');
       toast(doneLabel + '：' + d.written + '/' + d.total + ' 个 → ' + String(d.out_dir).split(/[\\\/]/).pop());
     } else {
       res.classList.remove('err');
