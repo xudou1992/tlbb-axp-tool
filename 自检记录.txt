@@ -35,3 +35,6 @@ icon.ico            102,139 字节  md5 c10229e9d095359f23c4a01140e6a783
 - 复验（新的 10-16 版游戏数据，Material8.axp 771 条）：界面接力测试 6 项全过
   （批量解开 → 结果区按钮 → 点击关面板接力；没开包只给 .axp 路径也能打包 matched=1）；
   打开 Model4.axp 54 条、导出 54 个文件 0 错误。
+
+- 2026-11-06 重打 exe：dist\AXP解包工具.exe，51,158,274 字节，md5 8072d62519ebce5fffebd60b52bba978。
+  冒烟（AXP_PORT=5055 真启动）：页面含 codecToRepack /「改完这个文件夹」、打开 Model4.axp 54 条。
